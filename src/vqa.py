@@ -299,6 +299,8 @@ class Trainer(TrainerBase):
             acc_dict_all = evaluator.evaluate_raw(quesid2ans)
             # acc_dict_answerable = evaluator.evaluate_raw(quesid2ans, is_topk_optimal=True)
             # acc_dict_unanswerable = evaluator.evaluate_raw(quesid2ans, is_topk_optimal=False)
+            print("test")
+            print(acc_dict_all)
 
             wandb_log_dict = {}
             wandb_log_dict['Test/overall'] = acc_dict_all['overall']

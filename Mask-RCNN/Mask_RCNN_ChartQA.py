@@ -36,8 +36,8 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Change these paths to your model, images, and saving paths
 trained_model_path = "maskrcnn.pth"
-images_path = "/mnt/c/Users/yangsen/Desktop/intern/ChartQA/ChartQA Dataset/train/png/"
-save_path = "../data/train/features/"
+images_path = "/mnt/c/Users/yangsen/Desktop/intern/ChartQA/ChartQA Dataset/test/png/"
+save_path = "../data/test/features/"
 CLASSES_NUM = 15
 
 
@@ -111,6 +111,8 @@ for image_name in tqdm(images_names):
         image_data_dict['visual_feats'] = mask_features.detach().cpu().numpy().tolist()
         image_data_dict['bboxes'] = normalized_boxes
 
+    if os.path.exists(save_path+str(image_name.split(".")[0])+'.json'):
+        continue
     with open(save_path+str(image_name.split(".")[0])+'.json', 'w') as f:
        json.dump(image_data_dict, f)
 
