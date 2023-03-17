@@ -1,0 +1,10 @@
+./data
+.idea
+Epoch30.pth
+T5 and VL-T5 Input File Examples.csv
+*.json
+*.zip
+*.pth
+*.pt
+
+
