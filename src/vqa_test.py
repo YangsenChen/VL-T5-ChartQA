@@ -7,7 +7,7 @@ import os
 import collections
 from pathlib import Path
 from packaging import version
-
+import json
 import numpy as np
 from tqdm import tqdm
 import torch
@@ -33,7 +33,7 @@ _use_apex = False
 
 # Check if Pytorch version >= 1.6 to switch between Native AMP and Apex
 if version.parse(torch.__version__) < version.parse("1.6"):
-    from transormers.file_utils import is_apex_available
+    from transformers.file_utils import is_apex_available
     if is_apex_available():
         from apex import amp
     _use_apex = True
@@ -118,226 +118,17 @@ class Trainer(TrainerBase):
         if self.verbose:
             print(f'It took {time() - start:.1f}s')
 
-
-    def train(self):
-        if self.verbose:
-            loss_meter = LossMeter()
-            best_valid = 0.
-            best_epoch = 0
-
-            if 't5' in self.args.backbone:
-                if self.args.use_vision:
-                    project_name = "VLT5_VQA"
-                else:
-                    project_name = "T5_VQA"
-            elif 'bart' in self.args.backbone:
-                if self.args.use_vision:
-                    project_name = "VLBart_VQA"
-                else:
-                    project_name = "Bart_VQA"
-
-            # wandb.init(project=project_name)
-            # wandb.run.name = self.args.run_name
-            # wandb.config.update(self.args)
-            # wandb.watch(self.model)
-
-            src_dir = Path(__file__).resolve().parent
-            base_path = str(src_dir.parent)
-            src_dir = str(src_dir)
-            #wandb.save(os.path.join(src_dir + "/*.py"), base_path=base_path)
-
-        if self.args.distributed:
-            dist.barrier()
-
-        global_step = 0
-        # for epoch in range(self.args.epochs):
-        #     if self.start_epoch is not None:
-        #         epoch += self.start_epoch
-        #     self.model.train()
-        #     if self.args.distributed:
-        #         self.train_loader.sampler.set_epoch(epoch)
-        #     if self.verbose:
-        #         pbar = tqdm(total=len(self.train_loader), ncols=120)
-        #
-        #     epoch_results = {
-        #         'loss': 0.,
-        #
-        #     }
-        #
-        #     quesid2ans = {}
-        #
-        #     for step_i, batch in enumerate(self.train_loader):
-        #
-        #         if self.args.fp16 and _use_native_amp:
-        #             with autocast():
-        #                 if self.args.distributed:
-        #                     results = self.model.module.train_step(batch)
-        #                 else:
-        #                     results = self.model.train_step(batch)
-        #         else:
-        #             if self.args.distributed:
-        #                 results = self.model.module.train_step(batch)
-        #             else:
-        #                 results = self.model.train_step(batch)
-        #
-        #         loss = results['loss']
-        #
-        #         if self.args.fp16 and _use_native_amp:
-        #             self.scaler.scale(loss).backward()
-        #         elif self.args.fp16 and _use_apex:
-        #             with amp.scale_loss(loss, self.optim) as scaled_loss:
-        #                 scaled_loss.backward()
-        #         else:
-        #             loss.backward()
-        #
-        #         loss = loss.detach()
-        #
-        #         # Update Parameters
-        #         if self.args.clip_grad_norm > 0:
-        #             if self.args.fp16 and _use_native_amp:
-        #                 self.scaler.unscale_(self.optim)
-        #                 torch.nn.utils.clip_grad_norm_(
-        #                     self.model.parameters(), self.args.clip_grad_norm)
-        #             elif self.args.fp16 and _use_apex:
-        #                 torch.nn.utils.clip_grad_norm_(amp.master_params(
-        #                     self.optim), self.args.clip_grad_norm)
-        #             else:
-        #                 torch.nn.utils.clip_grad_norm_(
-        #                     self.model.parameters(), self.args.clip_grad_norm)
-        #
-        #         if self.args.fp16 and _use_native_amp:
-        #             self.scaler.step(self.optim)
-        #             self.scaler.update()
-        #         else:
-        #             self.optim.step()
-        #
-        #         if self.lr_scheduler:
-        #             self.lr_scheduler.step()
-        #         for param in self.model.parameters():
-        #             param.grad = None
-        #
-        #         global_step += 1
-        #
-        #         for k, v in results.items():
-        #             if k in epoch_results:
-        #                 epoch_results[k] += v.item()
-        #
-        #         if self.lr_scheduler:
-        #             if version.parse(torch.__version__) >= version.parse("1.4"):
-        #                 lr = self.lr_scheduler.get_last_lr()[0]
-        #             else:
-        #                 lr = self.lr_scheduler.get_lr()[0]
-        #         else:
-        #             try:
-        #                 lr = self.optim.get_lr()[0]
-        #             except AttributeError:
-        #                 lr = self.args.lr
-        #
-        #         if self.verbose:
-        #             loss_meter.update(loss.item())
-        #             desc_str = f'Epoch {epoch} | LR {lr:.6f}'
-        #             desc_str += f' | Loss {loss_meter.val:4f}'
-        #
-        #             pbar.set_description(desc_str)
-        #             pbar.update(1)
-        #
-        #         if self.args.distributed:
-        #             dist.barrier()
-        #
-        #     if self.verbose:
-        #         pbar.close()
-        #
-        #     # Validation
-        #     score_dict = self.evaluate(self.val_loader)
-        #
-        #     if self.verbose:
-        #         #valid_score = score_dict['topk_score'] * 100.
-        #         valid_score_raw = score_dict['overall']
-        #         if valid_score_raw > best_valid or epoch == 0:
-        #             best_valid = valid_score_raw
-        #             best_epoch = epoch
-        #             self.save("BEST")
-        #
-        #         log_str = ''
-        #         log_str += "\nEpoch %d: Valid Raw %0.2f" % (epoch, valid_score_raw)
-        #         log_str += "\nEpoch %d: Best Raw %0.2f\n" % (best_epoch, best_valid)
-        #
-        #         # wandb_log_dict = {}
-        #         # wandb_log_dict['Train/Loss'] = epoch_results['loss'] / len(self.train_loader)
-        #         #
-        #         # wandb_log_dict['Valid/score'] = valid_score
-        #         #
-        #         # wandb_log_dict['Valid/raw_score'] = score_dict['overall']
-        #         # for qtype, score in score_dict['perQuestionType'].items():
-        #         #     wandb_log_dict[f'Valid_Qtypes/{qtype}'] = score
-        #         # for atype, score in score_dict['perAnswerType'].items():
-        #         #     if atype == 'yes/no':
-        #         #         atype = 'yes_no'
-        #         #     wandb_log_dict[f'Valid_Atypes/{atype}'] = score
-        #         #
-        #         # wandb.log(wandb_log_dict, step=epoch)
-        #         print(log_str)
-        #
-        #     if self.args.distributed:
-        #         dist.barrier()
-
-        # if self.verbose:
-        #     self.save("LAST")
-
-        # Test Set
-        best_path = os.path.join(self.args.output, 'BEST')
-        self.load(best_path)
-
-        quesid2ans = self.predict(self.test_loader)
-
-        if self.verbose:
-            evaluator = self.test_loader.evaluator
-            #score_dict = evaluator.evaluate(quesid2ans)
-
-            #evaluator.dump_result(quesid2ans)
-
-            acc_dict_all = evaluator.evaluate_raw(quesid2ans)
-            # acc_dict_answerable = evaluator.evaluate_raw(quesid2ans, is_topk_optimal=True)
-            # acc_dict_unanswerable = evaluator.evaluate_raw(quesid2ans, is_topk_optimal=False)
-            print("test")
-            print(acc_dict_all)
-            wandb_log_dict = {}
-            wandb_log_dict['Test/overall'] = acc_dict_all['overall']
-            # wandb_log_dict['Test/topk_optimal'] = acc_dict_answerable['overall']
-            # wandb_log_dict['Test/topk_not_optimal'] = acc_dict_unanswerable['overall']
-
-            # for qtype, score in acc_dict_all['perQuestionType'].items():
-            #     wandb_log_dict[f'Test_Qtypes/{qtype}'] = score
-            # for atype, score in acc_dict_all['perAnswerType'].items():
-            #     if atype == 'yes/no':
-            #         atype = 'yes_no'
-            #     wandb_log_dict[f'Test_Atypes/{atype}'] = score
-
-            logging.info(wandb_log_dict)
-            #wandb.log(wandb_log_dict)
-
-        # if self.args.submit:
-        #     dump_path = os.path.join(self.args.output, 'submit.json')
-        #     self.predict(self.submit_test_loader, dump_path)
-
-            # wandb.save(dump_path, base_path=self.args.output)
-            # wandb.log({'finished': True})
-
-        if self.args.distributed:
-            dist.barrier()
-            exit()
-
     def predict(self, loader, dump_path=None):
+
         self.model.eval()
         with torch.no_grad():
             quesid2ans = {}
-            if self.verbose:
-                pbar = tqdm(total=len(loader), ncols=120, desc="Prediction")
+
+            pbar = tqdm(total=len(loader), ncols=120, desc="Prediction")
             for i, batch in enumerate(loader):
-                if self.args.distributed:
-                    results = self.model.module.test_step(batch)
-                else:
-                    results = self.model.test_step(batch)
+
+                # todo: add pgd attack here
+                results = self.model.test_step(batch)
 
                 pred_ans = results['pred_ans']
                 ques_ids = batch['question_ids']
@@ -345,14 +136,9 @@ class Trainer(TrainerBase):
                 for qid, ans in zip(ques_ids, pred_ans):
                     quesid2ans[qid] = ans
 
-                if self.verbose:
-                    pbar.update(1)
+                pbar.update(1)
 
-            if self.verbose:
-                pbar.close()
-
-        if self.args.distributed:
-            dist.barrier()
+            pbar.close()
 
         qid2ans_list = dist_utils.all_gather(quesid2ans)
         if self.verbose:
@@ -365,8 +151,75 @@ class Trainer(TrainerBase):
                 evaluator = loader.evaluator
                 evaluator.dump_result(quesid2ans, dump_path)
 
+        evaluator = self.test_loader.evaluator
+
+        acc_dict_all = evaluator.evaluate_raw(quesid2ans)
+        print("test"+acc_dict_all)
+
         return quesid2ans
 
+    def predict1(self, loader, dump_path=None, epsilon=0.05, alpha=0.01, num_iter=5):
+
+        self.model.eval()
+        with torch.no_grad():
+            quesid2ans = {}
+
+            pbar = tqdm(total=len(loader), ncols=120, desc="Prediction")
+            for i, batch in enumerate(loader):
+
+                # PGD attack
+                if epsilon > 0:
+                    # Copy input data and create perturbation
+                    X = batch['input_ids'].clone().detach().requires_grad_(True)
+                    delta = torch.zeros_like(X)
+
+                    for t in range(num_iter):
+                        # Forward pass
+                        outputs = self.model(X)
+                        loss = outputs['loss']
+
+                        # Calculate gradients
+                        loss.backward()
+
+                        # Create perturbation
+                        delta_t = alpha * X.grad.detach().sign()
+                        delta = torch.clamp(delta + delta_t, -epsilon, epsilon)
+
+                        # Add perturbation to input data
+                        X = torch.clamp(batch['input_ids'] + delta, 0, 1).detach().requires_grad_(True)
+
+                    batch['input_ids'] = X
+
+                # Perform regular prediction
+                results = self.model.test_step(batch)
+
+                pred_ans = results['pred_ans']
+                ques_ids = batch['question_ids']
+
+                for qid, ans in zip(ques_ids, pred_ans):
+                    quesid2ans[qid] = ans
+
+                pbar.update(1)
+
+            pbar.close()
+
+        qid2ans_list = dist_utils.all_gather(quesid2ans)
+        if self.verbose:
+            quesid2ans = {}
+            for qid2ans in qid2ans_list:
+                for k, v in qid2ans.items():
+                    quesid2ans[k] = v
+
+            if dump_path is not None:
+                evaluator = loader.evaluator
+                evaluator.dump_result(quesid2ans, dump_path)
+
+        evaluator = self.test_loader.evaluator
+
+        acc_dict_all = evaluator.evaluate_raw(quesid2ans)
+        print("test" + acc_dict_all)
+
+        return quesid2ans
     def evaluate(self, loader, dump_path=None):
         quesid2ans = self.predict(loader, dump_path)
 
@@ -388,52 +241,24 @@ def main_worker(gpu, args):
         torch.cuda.set_device(args.gpu)
         dist.init_process_group(backend='nccl')
 
-
-    print(f'Building train loader at GPU {gpu}')
-    train_loader = get_loader(
-        args,
-        split=args.train, mode='train', batch_size=args.batch_size,
-        distributed=args.distributed, gpu=args.gpu,
-        workers=args.num_workers,
-        topk=args.train_topk,
-    )
-
-    if args.valid_batch_size is not None:
-        valid_batch_size = args.valid_batch_size
-    else:
-        valid_batch_size = args.batch_size
-    print(f'Building val loader at GPU {gpu}')
-    val_loader = get_loader(
-        args,
-        split=args.valid, mode='val', batch_size=valid_batch_size,
-        distributed=args.distributed, gpu=args.gpu,
-        workers=4,
-        topk=args.valid_topk,
-    )
-
     print(f'Building test loader at GPU {gpu}')
     test_loader = get_loader(
         args,
-        split=args.test, mode='val', batch_size=valid_batch_size,
+        split=args.test, mode='val', batch_size=args.valid_batch_size,
         distributed=args.distributed, gpu=args.gpu,
         workers=4,
         topk=args.valid_topk,
     )
 
-    trainer = Trainer(args, train_loader, val_loader, test_loader, train=True)
+    trainer = Trainer(args, None, None, test_loader, train=False)
 
-    if args.submit:
-        print(f'Building test submit loader at GPU {gpu}')
-        submit_test_loader = get_loader(
-            args,
-            split='test', mode='val', batch_size=valid_batch_size,
-            distributed=args.distributed, gpu=args.gpu,
-            workers=4,
-            topk=args.valid_topk,
-        )
-        trainer.submit_test_loader = submit_test_loader
+    qid_ans = trainer.predict(test_loader)
+    qid_new = {}
+    for key, val in qid_ans.items():
+        qid_new[str(key)] = str(val)
+    with open(args.output + 'predictions.json', 'w') as f:
+        json.dump(qid_new, f)
 
-    trainer.train()
 
 if __name__ == "__main__":
     cudnn.benchmark = True
@@ -465,5 +290,6 @@ if __name__ == "__main__":
 
     if args.distributed:
         main_worker(args.local_rank, args)
+
     else:
         main_worker(0, args)
